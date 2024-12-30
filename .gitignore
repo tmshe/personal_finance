@@ -1,0 +1,8 @@
+# python 
+.venv/
+.DS_Store
+
+# data files 
+raw/
+*.csv
+*.pdf
