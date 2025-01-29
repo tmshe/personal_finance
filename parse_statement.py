@@ -9,13 +9,14 @@ def extract_pdf_to_dataframe(pdf_file):
     data = []
     with pdfplumber.open(pdf_file) as pdf:
         for page in pdf.pages:
-            text = page.extract_text()
+            text = page.extract_text(x_tolerance=1)
+            # DEBUG print('pause')
             # Process the text to extract structured data
             # Example: Split lines, find dates, amounts, and descriptions
             for line in text.split("\n"):
                 # look for pattern "JAN7 JAN8 PIONEER43417KITCHENER $51.43"
                 # Suitable for TD Credit card pdf statements
-                pattern = r"^(\w+\d+)(?:\s+(\w+\d+))?\s+([\S#]+(?:\s+[\w#]+)*)\s+(-?\$[\d,]+\.\d{2})" 
+                pattern = r"^(\w{3} \d+)\s+(\w{3} \d+)?\s+([\w\s\S]+?)\s+(-?\$[\d,]+\.\d{2})" 
                 matches = re.findall(pattern, line)
                 if matches:
                     # #>>> DEBUG 
@@ -42,7 +43,7 @@ def convert_multiple_pdf_statements_to_dataframe(pdf_files,year):
 
     # Cleaning up data from pdf source 
     def convert_MMMDD_to_yyyymmdd(date_str, year):
-        return datetime.strptime(f"{date_str}{year}", "%b%d%Y").strftime("%Y/%m/%d")
+        return datetime.strptime(f"{date_str}{year}", "%b %d%Y").strftime("%Y/%m/%d")
     combined_df['date'] =  combined_df['date'].apply(lambda x: convert_MMMDD_to_yyyymmdd(x, year))
     combined_df['date'] = pd.to_datetime(combined_df['date'])
     combined_df['amount'] = combined_df['amount'].astype(float)
