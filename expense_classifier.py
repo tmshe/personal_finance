@@ -47,9 +47,9 @@ def clean_text_BERT(text):
 # - 1st column 'desription' contains transaction description 
 # - 2nd colum 'class' contains the label for each transaction
 # Load training set 
-df_transaction_description = pd.read_csv("train.csv")
+df_transaction_description = pd.read_csv("chichi_train.csv")
 # Load testing set 
-df_transaction_description_test = pd.read_csv('statements.csv')
+df_transaction_description_test = pd.read_csv('merged_statements_1.csv')
 
 text_raw = df_transaction_description['description']  
 text_BERT = text_raw.apply(lambda x: clean_text_BERT(x))
