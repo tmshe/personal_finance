@@ -85,6 +85,22 @@ def convert_multiple_pdf_statements_to_dataframe(pdf_files,year):
     combined_df['date'] = pd.to_datetime(combined_df['date'])
     combined_df['amount'] = combined_df['amount'].astype(float)
     combined_df['amount'] = combined_df['amount'] * -1
+    combined_df['balance'] = 0.0
+
+    # Calculate balance for each credit card transaction
+    starting_balances = {
+    "BMO_Credit": -1438.39,
+    "TD_Credit": 0.00
+    }
+    # Sort by date to ensure balance is calculated chronologically
+    combined_df = combined_df.sort_values(by="date").reset_index(drop=True)
+    # def apply_running_balance(group): # Create a function that applies the correct starting balance
+    #     start_balance = starting_balances.get(group.name, 0)
+    #     return group["amount"].cumsum() + start_balance
+    # Apply running balance by 'source'
+    combined_df["balance"] = combined_df.groupby("source")["amount"].transform(
+        lambda x: x.cumsum() + starting_balances.get(x.name, 0)
+    )
 
     return combined_df
 
@@ -102,12 +118,10 @@ def cleanup_multiple_csvs(csv_files):
         csv_df['date'] = pd.to_datetime(csv_df['date'], errors="coerce", format="mixed", dayfirst=False)
         csv_df['amount'] = csv_df['deposit'] - csv_df['withdraw'] 
         statement_type = os.path.basename(csv).split("_")
-        # if statement_type[1] == "Credit": # balance on credit card statements should be negative 
-        #     csv_df['balance'] = csv_df['balance'] * -1 
+        if statement_type[1] == "Credit": # balance on credit card statements should be negative 
+            csv_df['balance'] = csv_df['balance'] * -1 
         csv_df['source'] = f"{statement_type[0]}_{statement_type[1]}" # e.g. "TD_Checking" or "TD_Credit"
-        combined_csv_df.append(csv_df[['date', 'description', 'amount', 'source',
-                                    #    'balance'
-                                       ]])
+        combined_csv_df.append(csv_df[['date', 'description', 'amount', 'source','balance']])
     return pd.concat(combined_csv_df, ignore_index=True)
 
 def main(): 
@@ -120,7 +134,7 @@ def main():
     pdf_files = [os.path.join(folder_path, file) for file in os.listdir(folder_path) if file.endswith(".pdf")]
     if len(pdf_files) > 0: 
         pdf_out_df = convert_multiple_pdf_statements_to_dataframe(pdf_files,year)
-    
+
     # Merge csv files 
     csv_files = [os.path.join(folder_path, file) for file in os.listdir(folder_path) if file.endswith(".csv")]
     if len(csv_files) > 0: 
