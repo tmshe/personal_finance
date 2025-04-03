@@ -47,9 +47,9 @@ def clean_text_BERT(text):
 # - 1st column 'desription' contains transaction description 
 # - 2nd colum 'class' contains the label for each transaction
 # Load training set 
-df_transaction_description = pd.read_csv("chichi_train.csv")
+df_transaction_description = pd.read_csv("TrainingMint_Export_201401_202312.csv")
 # Load testing set 
-df_transaction_description_test = pd.read_csv('merged_statements_1.csv')
+df_transaction_description_test = pd.read_csv('merged_statements.csv')
 
 text_raw = df_transaction_description['description']  
 text_BERT = text_raw.apply(lambda x: clean_text_BERT(x))
@@ -111,7 +111,9 @@ df_output = pd.DataFrame.from_dict(d_output)
 merged_df = pd.concat([df_transaction_description_test['date'],
                        df_transaction_description_test['description'],
                        df_output['matched_class'], 
-                       df_transaction_description_test['amount']], axis=1)
+                       df_transaction_description_test['amount'], 
+                       df_transaction_description_test['source'], 
+                       df_transaction_description_test['balance']], axis=1)
 print(merged_df.head())
-merged_df.to_csv('transactions_classfied.csv')
+merged_df.to_csv('transactions_classfied.csv', index=False)
 print('transactions_classfied.csv exported\nend')
