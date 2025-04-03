@@ -9,7 +9,7 @@ from datetime import datetime
 def extract_pdf_to_dataframe(pdf_file, statement_type):
     data = []
     # putting the regex pattern outside the read line loop to avoid compiling it every line 
-    if statement_type == "TD": # For TD Credit card pdf statements
+    if statement_type == "TD_Credit": # For TD Credit card pdf statements
     # look for pattern "JAN7 JAN8 PIONEER43417KITCHENER $51.43"
         pattern = re.compile(
             r"""^
@@ -23,7 +23,7 @@ def extract_pdf_to_dataframe(pdf_file, statement_type):
             """,
             re.VERBOSE
             ) 
-    if statement_type == "BMO": # For BMO credit card pdf statements 
+    if statement_type == "BMO_Credit": # For BMO credit card pdf statements 
     # look for pattern "Jul. 29 Jul. 30 RCSS #2822 KITCHENER ON 86.51"
         pattern = re.compile(
             r"""
@@ -57,35 +57,60 @@ def extract_pdf_to_dataframe(pdf_file, statement_type):
                     description = matches["description"]
                     amount = float(matches["amount"].replace(",","").replace("$",""))
                     if matches["credit"] == "CR": amount = -amount # handle the CR flag in BMO statements, representing credit card payment
-                    data.append({"date": date, "description": description, "amount": amount, "source": f"{statement_type}_Credit"})
+                    data.append({"date": date, "description": description, "amount": amount, "source": statement_type})
     return pd.DataFrame(data)
+
+# Function to clean up dataframe from pdf file 
+#   - convert date to proper datetime format 
+#   - set amount to negative for credit transactions 
+def clean_up_pdf_data(pdf_df, year): 
+    # Cleaning up data from pdf source 
+    def convert_MMMDD_to_yyyymmdd(date_str, year):
+        date_str = date_str.replace(".", "").replace(" ", "").upper()
+        return datetime.strptime(f"{date_str}{year}", "%b%d%Y").strftime("%Y-%m-%d")
+    pdf_df['date'] = pdf_df['date'].apply(lambda x: convert_MMMDD_to_yyyymmdd(x, year))
+    pdf_df['date'] = pd.to_datetime(pdf_df['date'])
+    pdf_df['amount'] = pdf_df['amount'].astype(float)
+    pdf_df['amount'] = pdf_df['amount'] * -1
+    pdf_df['balance'] = 0.0     # the balanace collumn is used in post-processing for a running sum 
+
+    return pdf_df
 
 # Function to convert multiple pdf into data frame and clean up data: 
 # take in pdf statement and convert into dataframe. With following cleanup: 
 #   - convert dates to yyyy/mm/dd format
 #   - convert amount to float 
 #   - convert the amount to negative (i.e. expense)
-# !!CAUTION!!: the script handles statements from a single year. Manual input is needed if pdf statemt contains transactions from two years (DEC and JAN)
-def convert_multiple_pdf_statements_to_dataframe(pdf_files,year): 
+def convert_multiple_pdf_statements_to_dataframe(pdf_files, year):    
     # Process multiple PDFs and merge into one DataFrame
-    
-    pdf_dataframes = [extract_pdf_to_dataframe(
-        pdf,    # pdf_file path 
-        os.path.basename(pdf).split('_')[0])    # statement_type: 'TD' or 'BMO'. The statements from the two banks have different formats. 
-        for pdf in pdf_files]
+    pdf_dataframes = []
+    # regex for parsing pdf filename 
+    pattern = re.compile(
+        r"""
+        (?P<statement_type>\w+_\w+)
+        _
+        (?P<statement_date_start>\d{8})
+        _
+        (?P<statement_date_end>\d{8})
+        (_\w+)?.pdf
+        """, 
+        re.VERBOSE
+    )
 
+    for pdf in pdf_files: 
+        try: filename_matches = pattern.search(os.path.basename(pdf))
+        except: raise ValueError(f"Invalid pdf file name: '{pdf}'. Example: TD_Credit_YYYYMMDD_YYYYMMDD.pdf")
+        statement_type = filename_matches['statement_type']
+        pdf_df = extract_pdf_to_dataframe(pdf, statement_type)
+        # clean up df extracted from pdf 
+        if filename_matches['statement_date_start'][:4] == filename_matches['statement_date_end'][:4]: 
+            statement_year = filename_matches['statement_date_start'][:4]
+        else: raise ValueError(f"Invalid pdf file name: '{pdf}'. Statement start and end dates must from the same year. ")
+        pdf_df = clean_up_pdf_data(pdf_df, statement_year)
+
+        pdf_dataframes.append(pdf_df) 
     # Combine all DataFrames
     combined_df = pd.concat(pdf_dataframes, ignore_index=True)
-
-    # Cleaning up data from pdf source 
-    def convert_MMMDD_to_yyyymmdd(date_str, year):
-        date_str = date_str.replace(".", "").replace(" ", "").upper()
-        return datetime.strptime(f"{date_str}{year}", "%b%d%Y").strftime("%Y-%m-%d")
-    combined_df['date'] = combined_df['date'].apply(lambda x: convert_MMMDD_to_yyyymmdd(x, year))
-    combined_df['date'] = pd.to_datetime(combined_df['date'])
-    combined_df['amount'] = combined_df['amount'].astype(float)
-    combined_df['amount'] = combined_df['amount'] * -1
-    combined_df['balance'] = 0.0
 
     # Calculate balance for each credit card transaction
     starting_balances = {
@@ -94,9 +119,6 @@ def convert_multiple_pdf_statements_to_dataframe(pdf_files,year):
     }
     # Sort by date to ensure balance is calculated chronologically
     combined_df = combined_df.sort_values(by="date").reset_index(drop=True)
-    # def apply_running_balance(group): # Create a function that applies the correct starting balance
-    #     start_balance = starting_balances.get(group.name, 0)
-    #     return group["amount"].cumsum() + start_balance
     # Apply running balance by 'source'
     combined_df["balance"] = combined_df.groupby("source")["amount"].transform(
         lambda x: x.cumsum() + starting_balances.get(x.name, 0)
@@ -142,6 +164,7 @@ def main():
 
     # Save to a single CSV file
     out_df = pd.concat([csv_out_df,pdf_out_df], ignore_index=True)
+    out_df = out_df.drop_duplicates()
     out_df = out_df.sort_values(by="date").reset_index(drop=True)
     out_df.to_csv("merged_statements.csv", index=False)
     print("Merged CSV created successfully!")
