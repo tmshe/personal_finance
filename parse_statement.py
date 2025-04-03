@@ -57,7 +57,7 @@ def extract_pdf_to_dataframe(pdf_file, statement_type):
                     description = matches["description"]
                     amount = float(matches["amount"].replace(",","").replace("$",""))
                     if matches["credit"] == "CR": amount = -amount # handle the CR flag in BMO statements, representing credit card payment
-                    data.append({"date": date, "description": description, "amount": amount})
+                    data.append({"date": date, "description": description, "amount": amount, "source": f"{statement_type}_Credit"})
     return pd.DataFrame(data)
 
 # Function to convert multiple pdf into data frame and clean up data: 
@@ -88,15 +88,27 @@ def convert_multiple_pdf_statements_to_dataframe(pdf_files,year):
 
     return combined_df
 
+# Function to read and concat multiple csv statements from TD
+# The csv must:
+#   - no header row 
+#   - columns: date, description, debit, credit, balance
+#   - date format upported: yyyy-mm-dd, mm/dd/yyyy 
 def cleanup_multiple_csvs(csv_files): 
-    all_dataframes = [pd.read_csv(csv, header=None) for csv in csv_files]
-    combined_df = pd.concat(all_dataframes, ignore_index=True)
-    combined_df.columns = ['date','description','withdraw','deposit','balance']
-    combined_df = combined_df.fillna(0)
-    combined_df['date'] = pd.to_datetime(combined_df['date'], errors="coerce", format="mixed", dayfirst=False)
-    combined_df['amount'] = combined_df['deposit'] - combined_df['withdraw'] 
-
-    return combined_df[['date','description','amount']]
+    combined_csv_df = []
+    for csv in csv_files: 
+        csv_df = pd.read_csv(csv, header=None)
+        csv_df.columns = ['date','description','withdraw','deposit','balance']
+        csv_df = csv_df.fillna(0)
+        csv_df['date'] = pd.to_datetime(csv_df['date'], errors="coerce", format="mixed", dayfirst=False)
+        csv_df['amount'] = csv_df['deposit'] - csv_df['withdraw'] 
+        statement_type = os.path.basename(csv).split("_")
+        # if statement_type[1] == "Credit": # balance on credit card statements should be negative 
+        #     csv_df['balance'] = csv_df['balance'] * -1 
+        csv_df['source'] = f"{statement_type[0]}_{statement_type[1]}" # e.g. "TD_Checking" or "TD_Credit"
+        combined_csv_df.append(csv_df[['date', 'description', 'amount', 'source',
+                                    #    'balance'
+                                       ]])
+    return pd.concat(combined_csv_df, ignore_index=True)
 
 def main(): 
     # specify folder that contains all transactions pdf or csv 
@@ -116,6 +128,7 @@ def main():
 
     # Save to a single CSV file
     out_df = pd.concat([csv_out_df,pdf_out_df], ignore_index=True)
+    out_df = out_df.sort_values(by="date").reset_index(drop=True)
     out_df.to_csv("merged_statements.csv", index=False)
     print("Merged CSV created successfully!")
 
