@@ -98,8 +98,8 @@ def convert_multiple_pdf_statements_to_dataframe(pdf_files, year):
     )
 
     for pdf in pdf_files: 
-        try: filename_matches = pattern.search(os.path.basename(pdf))
-        except: raise ValueError(f"Invalid pdf file name: '{pdf}'. Example: TD_Credit_YYYYMMDD_YYYYMMDD.pdf")
+        filename_matches = pattern.search(os.path.basename(pdf))
+        if not filename_matches: raise ValueError(f"Invalid pdf file name: '{pdf}'. Example: TD_Credit_YYYYMMDD_YYYYMMDD.pdf")
         statement_type = filename_matches['statement_type']
         pdf_df = extract_pdf_to_dataframe(pdf, statement_type)
         # clean up df extracted from pdf 
