@@ -13,17 +13,17 @@ def extract_pdf_to_dataframe(pdf_file, statement_type):
     # look for pattern "JAN7 JAN8 PIONEER43417KITCHENER $51.43"
         pattern = re.compile(
             r"""^
-            (?P<transaction_date>\w{3} \d+)
+            (?P<transaction_date>[A-Z]{3}\s+\d{1,2})
             \s+
-            (?P<postting_date>\w{3} \d+)?
+            (?P<posting_date>[A-Z]{3}\s+\d{1,2})
             \s+
-            (?P<description>[\w\s\S]+?)
+            (?P<description>.*?)
             \s+
-            (?P<amount>-?\$[\d,]+\.\d{2})
+            (?P<amount>-?\$\d{1,3}(?:,\d{3})*\.\d{2})
             """,
             re.VERBOSE
             ) 
-    if statement_type == "BMO_Credit": # For BMO credit card pdf statements 
+    elif statement_type == "BMO_Credit": # For BMO credit card pdf statements 
     # look for pattern "Jul. 29 Jul. 30 RCSS #2822 KITCHENER ON 86.51"
         pattern = re.compile(
             r"""
@@ -56,7 +56,8 @@ def extract_pdf_to_dataframe(pdf_file, statement_type):
                     date = matches["transaction_date"]
                     description = matches["description"]
                     amount = float(matches["amount"].replace(",","").replace("$",""))
-                    if matches["credit"] == "CR": amount = -amount # handle the CR flag in BMO statements, representing credit card payment
+                    credit_flag = matches.groupdict().get("credit") # deal with TD statement where there is no 'credit'
+                    if credit_flag == "CR": amount = -amount # handle the CR flag in BMO statements, representing credit card payment
                     data.append({"date": date, "description": description, "amount": amount, "source": statement_type})
     return pd.DataFrame(data)
 
