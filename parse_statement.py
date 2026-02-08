@@ -82,7 +82,7 @@ def clean_up_pdf_data(pdf_df, year):
 #   - convert dates to yyyy/mm/dd format
 #   - convert amount to float 
 #   - convert the amount to negative (i.e. expense)
-def convert_multiple_pdf_statements_to_dataframe(pdf_files, year):    
+def convert_multiple_pdf_statements_to_dataframe(pdf_files):    
     # Process multiple PDFs and merge into one DataFrame
     pdf_dataframes = []
     # regex for parsing pdf filename 
@@ -149,14 +149,15 @@ def cleanup_multiple_csvs(csv_files):
 
 def main(): 
     # specify folder that contains all transactions pdf or csv 
+    # input data must follow naming convention to allow script to ingest metadata 
+    # <Bank Name>_<Account type>_<Start date, yyyymmdd>_<End date, yyyymmdd>.csv/pdf
+    # e.g. BMO_Credit_20251025_20251124 
+    # SPECIAL for PDF: a single file cannot contain transactions from 
     folder_path = 'raw'
     # Convert and merge PDF files 
-    # PDF statements does not have the year, specify the year the statements are for. 
-    # DO NOT USE pdf statemts containing transactions from two years (e.g. 2023 DEC and 2024 JAN)
-    year = 2024
     pdf_files = [os.path.join(folder_path, file) for file in os.listdir(folder_path) if file.endswith(".pdf")]
     if len(pdf_files) > 0: 
-        pdf_out_df = convert_multiple_pdf_statements_to_dataframe(pdf_files,year)
+        pdf_out_df = convert_multiple_pdf_statements_to_dataframe(pdf_files)
 
     # Merge csv files 
     csv_files = [os.path.join(folder_path, file) for file in os.listdir(folder_path) if file.endswith(".csv")]
